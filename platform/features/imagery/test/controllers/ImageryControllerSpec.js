@@ -42,14 +42,15 @@ define(
                     ['getId']
                 );
                 newDomainObject = { name: 'foo' };
-
                 oldDomainObject.getId.andReturn('testID');
                 openmct = {
                     objects: jasmine.createSpyObj('objectAPI', [
                         'get'
                     ]),
                     time: jasmine.createSpyObj('timeAPI', [
-                        'timeSystem'
+                        'timeSystem',
+                        'on',
+                        'off'
                     ]),
                     telemetry: jasmine.createSpyObj('telemetryAPI', [
                         'subscribe',
@@ -94,11 +95,13 @@ define(
                 metadata.valuesForHints.andReturn(["value"]);
 
                 controller = new ImageryController($scope, openmct);
-
             });
 
             describe("when loaded", function () {
-                var callback;
+                var callback,
+                    boundsListener;
+                var mockBounds = {start: 1434600000000, end: 1434600500000};
+
                 beforeEach(function () {
                     waitsFor(function () {
                         return hasLoaded;
@@ -106,11 +109,15 @@ define(
 
 
                     runs(function () {
+                        openmct.time.on.calls.forEach(function (call) {
+                            if (call.args[0] === "bounds") {
+                                boundsListener = call.args[1];
+                            }
+                        });
                         callback =
                             openmct.telemetry.subscribe.mostRecentCall.args[1];
                     });
                 });
-
 
                 it("uses LAD telemetry", function () {
                     expect(openmct.telemetry.request).toHaveBeenCalledWith(
@@ -165,7 +172,14 @@ define(
                     );
                 });
 
-                it("unsubscribes when scope is destroyed", function () {
+                it("requests telemetry", function () {
+                    expect(openmct.telemetry.request).toHaveBeenCalledWith(
+                        newDomainObject,
+                        jasmine.any(Object)
+                    );
+                });
+
+                it("unsubscribes and unlistens when scope is destroyed", function () {
                     expect(unsubscribe).not.toHaveBeenCalled();
 
                     $scope.$on.calls.forEach(function (call) {
@@ -174,6 +188,32 @@ define(
                         }
                     });
                     expect(unsubscribe).toHaveBeenCalled();
+                    expect(openmct.time.off)
+                        .toHaveBeenCalledWith('bounds', jasmine.any(Function));
+                });
+
+                it("listens for bounds event and responds to tick and manual change", function () {
+                    expect(openmct.time.on).toHaveBeenCalled();
+                    openmct.telemetry.request.reset();
+                    boundsListener(mockBounds, true);
+                    expect(openmct.telemetry.request).not.toHaveBeenCalled();
+                    boundsListener(mockBounds, false);
+                    expect(openmct.telemetry.request).toHaveBeenCalledWith(newDomainObject, mockBounds);
+                });
+
+                it("recognizes duplicate bounds", function () {
+                    openmct.telemetry.request.reset();
+                    boundsListener(mockBounds, false);
+                    boundsListener(mockBounds, false);
+                    boundsListener(mockBounds, false);
+                    expect(openmct.telemetry.request.calls.length).toBe(1);
+                });
+
+                it ("doesnt append duplicate datum", function () {
+                    var mockDatum = {url: 'image/url', utc: 1434600000000};
+                    expect(controller.updateHistory(mockDatum)).toBe(true);
+                    expect(controller.updateHistory(mockDatum)).toBe(false);
+                    expect(controller.updateHistory(mockDatum)).toBe(false);
                 });
             });
 
