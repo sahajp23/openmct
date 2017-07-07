@@ -33,7 +33,8 @@ define(
                 metadata,
                 prefix,
                 controller,
-                hasLoaded;
+                hasLoaded,
+                mockWindow;
 
             beforeEach(function () {
                 $scope = jasmine.createSpyObj('$scope', ['$on', '$watch']);
@@ -93,8 +94,12 @@ define(
                 });
                 metadata.value.andReturn("timestamp");
                 metadata.valuesForHints.andReturn(["value"]);
+                mockWindow = jasmine.createSpyObj('$window', ['requestAnimationFrame']);
+                mockWindow.requestAnimationFrame.andCallFake(function (f) {
+                    return f();
+                });
 
-                controller = new ImageryController($scope, openmct);
+                controller = new ImageryController($scope, mockWindow, openmct);
             });
 
             describe("when loaded", function () {

@@ -24,9 +24,13 @@
  * This bundle implements views of image telemetry.
  * @namespace platform/features/imagery
  */
+
 define(
-    ['lodash'],
-    function (_) {
+    [
+        'zepto',
+        'lodash'
+    ],
+    function ($, _) {
 
         /**
          * Controller for the "Imagery" view of a domain object which
@@ -35,8 +39,9 @@ define(
          * @memberof platform/features/imagery
          */
 
-        function ImageryController($scope, openmct) {
+        function ImageryController($scope, $window, openmct) {
             this.$scope = $scope;
+            this.$window = $window;
             this.openmct = openmct;
             this.date = "";
             this.time = "";
@@ -44,10 +49,9 @@ define(
             this.imageUrl = "";
             this.requestCount = 0;
             this.lastBound = undefined;
-
-            // Temporary workaround for multiple bounds events,
-            // keeps track of most recent change to bounds to prevent multiple
-            // querries per individual bounds change
+            this.autoScroll = false;
+            this.scrollable =
+                $(document.getElementsByClassName('l-image-thumbs-wrapper')[0]);
 
             this.$scope.imageHistory = [];
             this.$scope.filters = {
@@ -60,6 +64,7 @@ define(
             this.updateValues = this.updateValues.bind(this);
             this.updateHistory = this.updateHistory.bind(this);
             this.onBoundsChange = this.onBoundsChange.bind(this);
+            this.onScroll = this.onScroll.bind(this);
 
             // Subscribe to telemetry when a domain object becomes available
             this.subscribe(this.$scope.domainObject);
@@ -67,6 +72,7 @@ define(
             // Unsubscribe when the plot is destroyed
             this.$scope.$on("$destroy", this.stopListening);
             this.openmct.time.on('bounds', this.onBoundsChange);
+            this.scrollable.on('scroll', this.onScroll);
         }
 
         ImageryController.prototype.subscribe = function (domainObject) {
@@ -132,6 +138,7 @@ define(
 
         ImageryController.prototype.stopListening = function () {
             this.openmct.time.off('bounds', this.onBoundsChange);
+            this.scrollable.off('scroll', this.onScroll);
             if (this.unsubscribe) {
                 this.unsubscribe();
                 delete this.unsubscribe;
@@ -156,17 +163,37 @@ define(
 
             this.time = this.timeFormat.format(datum);
             this.imageUrl = this.imageFormat.format(datum);
+
         };
 
         // Update displayable values and append datum to running history
         ImageryController.prototype.updateHistory = function (datum) {
             if (this.$scope.imageHistory.length === 0 ||
                 !_.isEqual(this.$scope.imageHistory.slice(-1)[0], datum)) {
+
                 var index = _.sortedIndex(this.$scope.imageHistory, datum, 'utc');
                 this.$scope.imageHistory.splice(index, 0, datum);
                 return true;
             }
+
             return false;
+        };
+
+        ImageryController.prototype.onScroll = function (event) {
+            this.$window.requestAnimationFrame(function () {
+                if (this.scrollable[0].scrollLeft <
+                    (this.scrollable[0].scrollWidth - this.scrollable[0].clientWidth) - 20) {
+                    this.autoScroll = false;
+                } else {
+                    this.autoScroll = true;
+                }
+            }.bind(this));
+        };
+
+        ImageryController.prototype.scrollToRight = function () {
+            if (this.autoScroll) {
+                this.scrollable[0].scrollLeft = this.scrollable[0].scrollWidth;
+            }
         };
 
         /**
@@ -212,4 +239,5 @@ define(
             };
 
         return ImageryController;
-});
+    }
+);

@@ -78,6 +78,7 @@ define([
                     "implementation": ImageryController,
                     "depends": [
                         "$scope",
+                        "$window",
                         "openmct"
                     ]
                 }
